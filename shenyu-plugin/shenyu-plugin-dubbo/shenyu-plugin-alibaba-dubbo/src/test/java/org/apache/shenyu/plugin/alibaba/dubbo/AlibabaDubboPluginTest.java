@@ -42,6 +42,8 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
+import java.net.InetSocketAddress;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.mockito.Mockito.mock;
@@ -88,7 +90,7 @@ public final class AlibabaDubboPluginTest {
         exchange.getAttributes().put(Constants.CONTEXT, context);
         exchange.getAttributes().put(Constants.META_DATA, metaData);
 
-        final Boolean result = alibabaDubboPluginUnderTest.skip(exchange);
+        final boolean result = alibabaDubboPluginUnderTest.skip(exchange);
 
         assertFalse(result);
     }
@@ -102,7 +104,7 @@ public final class AlibabaDubboPluginTest {
 
     @Test
     public void testAlibabaDubboPlugin() {
-        final ServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("localhost").build());
+        final ServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("localhost").remoteAddress(new InetSocketAddress("127.0.0.1", 20880)).build());
         ShenyuContext context = mock(ShenyuContext.class);
         when(context.getRpcType()).thenReturn(RpcTypeEnum.DUBBO.getName());
         exchange.getAttributes().put(Constants.CONTEXT, context);
@@ -119,7 +121,7 @@ public final class AlibabaDubboPluginTest {
 
     @Test
     public void testAlibabaDubboPluginMetaDataNull() {
-        final ServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("localhost").build());
+        final ServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("localhost").remoteAddress(new InetSocketAddress("127.0.0.1", 20880)).build());
         ShenyuContext context = mock(ShenyuContext.class);
         when(context.getRpcType()).thenReturn(RpcTypeEnum.DUBBO.getName());
         exchange.getAttributes().put(Constants.CONTEXT, context);
@@ -131,7 +133,7 @@ public final class AlibabaDubboPluginTest {
 
         try (MockedStatic<ShenyuResultWrap> shenyuResultWrapMockedStatic = mockStatic(ShenyuResultWrap.class)) {
             shenyuResultWrapMockedStatic.when(() -> ShenyuResultWrap
-                    .error(ShenyuResultEnum.DUBBO_HAVE_BODY_PARAM.getCode(), ShenyuResultEnum.DUBBO_HAVE_BODY_PARAM.getMsg(), null))
+                    .error(exchange, ShenyuResultEnum.DUBBO_HAVE_BODY_PARAM, null))
                     .thenReturn(new Object());
 
             Mono<Void> voidMono = alibabaDubboPluginUnderTest.doExecute(exchange, chain, selectorData, data);

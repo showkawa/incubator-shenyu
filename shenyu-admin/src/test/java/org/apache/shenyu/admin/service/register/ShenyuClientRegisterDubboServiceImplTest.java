@@ -14,162 +14,141 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+    
 package org.apache.shenyu.admin.service.register;
-
-import org.apache.shenyu.admin.mapper.MetaDataMapper;
-import org.apache.shenyu.admin.model.dto.RuleDTO;
+    
+import org.apache.commons.lang3.StringUtils;
 import org.apache.shenyu.admin.model.entity.MetaDataDO;
-import org.apache.shenyu.admin.service.PluginService;
-import org.apache.shenyu.admin.service.RuleService;
-import org.apache.shenyu.admin.service.SelectorService;
+import org.apache.shenyu.admin.model.entity.SelectorDO;
 import org.apache.shenyu.admin.service.impl.MetaDataServiceImpl;
-import org.apache.shenyu.admin.utils.ShenyuResultMessage;
-import org.apache.shenyu.common.enums.OperatorEnum;
-import org.apache.shenyu.common.enums.PluginEnum;
+import org.apache.shenyu.common.dto.convert.rule.impl.DubboRuleHandle;
+import org.apache.shenyu.common.dto.convert.selector.DivideUpstream;
+import org.apache.shenyu.common.dto.convert.selector.DubboUpstream;
 import org.apache.shenyu.common.enums.RpcTypeEnum;
-import org.apache.shenyu.common.utils.UUIDUtils;
+import org.apache.shenyu.common.exception.ShenyuException;
+import org.apache.shenyu.common.utils.GsonUtils;
 import org.apache.shenyu.register.common.dto.MetaDataRegisterDTO;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.apache.shenyu.register.common.dto.URIRegisterDTO;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.springframework.context.ApplicationEventPublisher;
-
-import java.util.Objects;
-import java.util.UUID;
-
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+    
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
+    
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.anyString;
-import static org.mockito.Mockito.anyBoolean;
-
+import static org.mockito.Mockito.when;
+    
 /**
- * Test cases for ShenyuClientRegisterDubboServiceImpl.
+ * Test cases for {@link ShenyuClientRegisterDubboServiceImpl}.
  */
-@PrepareForTest(MetaDataServiceImpl.class)
-@RunWith(MockitoJUnitRunner.Silent.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 public final class ShenyuClientRegisterDubboServiceImplTest {
-
-    @Mock
-    private MetaDataMapper metaDataMapper;
-
+    
+    public static final String LOCALHOST = "localhost";
+    
     @InjectMocks
-    private MetaDataServiceImpl metaDataService;
-
-    @Mock
-    private SelectorService selectorService;
-
-    @Mock
-    private PluginService pluginService;
-
-    @Mock
-    private RuleService ruleService;
-
-    @Mock
-    private ApplicationEventPublisher eventPublisher;
-
     private ShenyuClientRegisterDubboServiceImpl shenyuClientRegisterDubboService;
-
-    @Before
-    public void setUp() {
-        shenyuClientRegisterDubboService = new ShenyuClientRegisterDubboServiceImpl(metaDataService, selectorService, ruleService, pluginService);
+    
+    @Mock
+    private MetaDataServiceImpl metaDataService;
+    
+    @Test
+    public void testRpcType() {
+        assertEquals(RpcTypeEnum.DUBBO.getName(), shenyuClientRegisterDubboService.rpcType());
+    }
+    
+    @Test
+    public void testSelectorHandler() {
+        MetaDataRegisterDTO metaDataRegisterDTO = MetaDataRegisterDTO.builder().build();
+        assertEquals(StringUtils.EMPTY, shenyuClientRegisterDubboService.selectorHandler(metaDataRegisterDTO));
+    }
+    
+    @Test
+    public void testRuleHandler() {
+        assertEquals(new DubboRuleHandle().toJson(), shenyuClientRegisterDubboService.ruleHandler());
+    }
+    
+    @Test
+    public void testRegisterMetadata() {
+        MetaDataDO metaDataDO = MetaDataDO.builder().build();
+        when(metaDataService.findByPath(any())).thenReturn(metaDataDO);
+        MetaDataRegisterDTO metaDataDTO = MetaDataRegisterDTO.builder().registerMetaData(true).build();
+        shenyuClientRegisterDubboService.registerMetadata(metaDataDTO);
+        verify(metaDataService).saveOrUpdateMetaData(metaDataDO, metaDataDTO);
+    }
+    
+    @Test
+    public void testBuildHandle() {
+        shenyuClientRegisterDubboService = spy(shenyuClientRegisterDubboService);
+    
+        final String returnStr = "[{protocol:'dubbo://',upstreamHost:'localhost',upstreamUrl:'localhost:8090',warmup:10,weight:50,status:true,timestamp:1637826588267},"
+                + "{protocol:'dubbo://',upstreamHost:'localhost',upstreamUrl:'localhost:8091',warmup:10,weight:50,status:true,timestamp:1637826588267}]";
+        final String expected = "[{\"port\":0,\"weight\":50,\"warmup\":10,\"protocol\":\"dubbo://\",\"upstreamHost\":\"localhost\",\"upstreamUrl\":\"localhost:8090\","
+                + "\"status\":true,\"timestamp\":1637826588267},{\"port\":0,\"weight\":50,\"warmup\":10,\"protocol\":\"dubbo://\",\"upstreamHost\":\"localhost\","
+                + "\"upstreamUrl\":\"localhost:8091\",\"status\":true,\"timestamp\":1637826588267}]";
+        
+        List<URIRegisterDTO> list = new ArrayList<>();
+        list.add(URIRegisterDTO.builder().appName("test1")
+                .rpcType(RpcTypeEnum.DUBBO.getName())
+                .host(LOCALHOST).port(8090).build());
+        SelectorDO selectorDO = mock(SelectorDO.class);
+        when(selectorDO.getHandle()).thenReturn(returnStr);
+        doNothing().when(shenyuClientRegisterDubboService).doSubmit(any(), any());
+        String actual = shenyuClientRegisterDubboService.buildHandle(list, selectorDO);
+        assertEquals(expected, actual);
+        List<DubboUpstream> resultList = GsonUtils.getInstance().fromCurrentList(actual, DubboUpstream.class);
+        assertEquals(resultList.size(), 2);
+    
+        list.clear();
+        list.add(URIRegisterDTO.builder().appName("test1")
+                .rpcType(RpcTypeEnum.DUBBO.getName())
+                .host(LOCALHOST).port(8092).build());
+        selectorDO = mock(SelectorDO.class);
+        when(selectorDO.getHandle()).thenReturn(returnStr);
+        doNothing().when(shenyuClientRegisterDubboService).doSubmit(any(), any());
+        actual = shenyuClientRegisterDubboService.buildHandle(list, selectorDO);
+        resultList = GsonUtils.getInstance().fromCurrentList(actual, DubboUpstream.class);
+        assertEquals(resultList.size(), 3);
+    
+        list.clear();
+        list.add(URIRegisterDTO.builder().appName("test1")
+                .rpcType(RpcTypeEnum.DUBBO.getName())
+                .host(LOCALHOST).port(8090).build());
+        doNothing().when(shenyuClientRegisterDubboService).doSubmit(any(), any());
+        selectorDO = mock(SelectorDO.class);
+        actual = shenyuClientRegisterDubboService.buildHandle(list, selectorDO);
+        resultList = GsonUtils.getInstance().fromCurrentList(actual, DubboUpstream.class);
+        assertEquals(resultList.size(), 1);
     }
 
     @Test
-    public void testSaveOrUpdateMetaData() {
-        MetaDataDO metaDataDO = buildMetaDataDO();
-        MetaDataRegisterDTO dubboMetaDataRegisterDTO = buildDubboMetaDataRegisterDTO(RpcTypeEnum.DUBBO);
-        shenyuClientRegisterDubboService.saveOrUpdateMetaData(metaDataDO, dubboMetaDataRegisterDTO);
-        verify(eventPublisher, times(1)).publishEvent(any());
-    }
-
-    @Test
-    public void testHandlerSelector() {
-        String selectorId = UUID.randomUUID().toString();
-        MetaDataRegisterDTO dubboMetaDataRegisterDTO = buildDubboMetaDataRegisterDTO(RpcTypeEnum.DUBBO);
-        given(selectorService.handlerSelectorNeedUpstreamCheck(any(), eq(PluginEnum.DUBBO.getName()))).willReturn(selectorId);
-        Assert.assertEquals(shenyuClientRegisterDubboService.handlerSelector(dubboMetaDataRegisterDTO), selectorId);
-    }
-
-    @Test
-    public void testHandlerRule() {
-        String selectorId = UUID.randomUUID().toString();
-        MetaDataDO metaDataDO = buildMetaDataDO();
-        MetaDataRegisterDTO dubboMetaDataRegisterDTO = buildDubboMetaDataRegisterDTO(RpcTypeEnum.DUBBO);
-        given(ruleService.register(any(), anyString(), anyBoolean())).willReturn(UUIDUtils.getInstance().generateShortUuid());
-        shenyuClientRegisterDubboService.handlerRule(selectorId, dubboMetaDataRegisterDTO, metaDataDO);
-    }
-
-    @Test
-    public void testRegisterRule() {
-        String selectorId = UUID.randomUUID().toString();
-        MetaDataRegisterDTO dubboMetaDataRegisterDTO = buildDubboMetaDataRegisterDTO(RpcTypeEnum.DUBBO);
-        dubboMetaDataRegisterDTO.setPath("path*");
-        RuleDTO result = shenyuClientRegisterDubboService.registerRule(selectorId, dubboMetaDataRegisterDTO, PluginEnum.DUBBO.getName());
-        Assert.assertNotNull(result);
-        Assert.assertEquals(result.getSelectorId(), selectorId);
-        Assert.assertEquals(result.getName(), dubboMetaDataRegisterDTO.getRuleName());
-        Assert.assertNotNull(result.getRuleConditions());
-        Assert.assertEquals(result.getRuleConditions().size(), 1);
-        Assert.assertEquals(result.getRuleConditions().get(0).getOperator(), OperatorEnum.MATCH.getAlias());
-
-        dubboMetaDataRegisterDTO.setPath("path");
-        result = shenyuClientRegisterDubboService.registerRule(selectorId, dubboMetaDataRegisterDTO, PluginEnum.DUBBO.getName());
-        Assert.assertEquals(result.getRuleConditions().get(0).getOperator(), OperatorEnum.EQ.getAlias());
-    }
-
-    @Test
-    public void testRegister() {
-        String selectorId = UUID.randomUUID().toString();
-
-        MetaDataRegisterDTO dubboMetaDataRegisterDTO = buildDubboMetaDataRegisterDTO(RpcTypeEnum.DUBBO);
-        MetaDataDO metaDataDO = buildMetaDataDO();
-        given(metaDataService.findByPath(any())).willReturn(metaDataDO);
-        given(selectorService.handlerSelectorNeedUpstreamCheck(any(), eq(PluginEnum.DUBBO.getName()))).willReturn(selectorId);
-        Assert.assertEquals(ShenyuResultMessage.SUCCESS, shenyuClientRegisterDubboService.register(dubboMetaDataRegisterDTO));
-        verify(eventPublisher, times(1)).publishEvent(any());
-        verify(selectorService, times(1)).handlerSelectorNeedUpstreamCheck(any(), eq(PluginEnum.DUBBO.getName()));
-        verify(ruleService, times(1)).register(any(), anyString(), anyBoolean());
-    }
-
-    private MetaDataRegisterDTO buildDubboMetaDataRegisterDTO(final RpcTypeEnum rpcTypeEnum) {
-        MetaDataRegisterDTO springMvcRegisterDTO = new MetaDataRegisterDTO();
-        springMvcRegisterDTO.setAppName("appName1");
-        springMvcRegisterDTO.setContextPath("content1");
-        springMvcRegisterDTO.setPath("path1");
-        springMvcRegisterDTO.setPathDesc("pathDesc1");
-        if (Objects.isNull(rpcTypeEnum)) {
-            springMvcRegisterDTO.setRpcType("http");
-        } else {
-            springMvcRegisterDTO.setRpcType(rpcTypeEnum.getName());
+    public void testBuildDivideUpstreamList() {
+        List<URIRegisterDTO> list = new ArrayList<>();
+        list.add(URIRegisterDTO.builder().appName("test1")
+                .rpcType(RpcTypeEnum.DUBBO.getName())
+                .host(LOCALHOST).port(8090).build());
+        list.add(URIRegisterDTO.builder().appName("test2")
+                .rpcType(RpcTypeEnum.DUBBO.getName())
+                .host(LOCALHOST).port(8091).build());
+        try {
+            Method testMethod = shenyuClientRegisterDubboService.getClass().getDeclaredMethod("buildDubboUpstreamList", List.class);
+            testMethod.setAccessible(true);
+            List<DivideUpstream> result = (List<DivideUpstream>) testMethod.invoke(shenyuClientRegisterDubboService, list);
+            assertEquals(result.size(), 2);
+        } catch (Exception e) {
+            throw new ShenyuException(e.getCause());
         }
-        springMvcRegisterDTO.setHost("localhost1");
-        springMvcRegisterDTO.setPort(1234);
-        springMvcRegisterDTO.setRuleName("ruleName1");
-        springMvcRegisterDTO.setEnabled(true);
-        springMvcRegisterDTO.setRegisterMetaData(false);
-        return springMvcRegisterDTO;
-    }
-
-    private MetaDataDO buildMetaDataDO() {
-        return MetaDataDO.builder()
-                .appName("appNameMetaData")
-                .path("pathMetaData")
-                .pathDesc("pathDescMetaData")
-                .rpcType("rpcTypeMetaData")
-                .serviceName("serviceName3")
-                .methodName("methodName3")
-                .parameterTypes("parameterTypesMetaData")
-                .rpcExt("rpcExtMetaData")
-                .enabled(true)
-                .build();
     }
 }

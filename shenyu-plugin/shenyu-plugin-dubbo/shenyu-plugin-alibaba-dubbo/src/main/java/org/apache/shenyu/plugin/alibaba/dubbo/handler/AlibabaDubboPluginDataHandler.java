@@ -17,40 +17,18 @@
 
 package org.apache.shenyu.plugin.alibaba.dubbo.handler;
 
-import org.apache.shenyu.common.dto.PluginData;
 import org.apache.shenyu.common.dto.convert.plugin.DubboRegisterConfig;
-import org.apache.shenyu.common.enums.PluginEnum;
-import org.apache.shenyu.common.utils.GsonUtils;
-import org.apache.shenyu.common.utils.Singleton;
-import org.apache.shenyu.plugin.alibaba.dubbo.cache.ApplicationConfigCache;
-import org.apache.shenyu.plugin.base.handler.PluginDataHandler;
-
-import java.util.Objects;
+import org.apache.shenyu.plugin.alibaba.dubbo.cache.AlibabaDubboConfigCache;
+import org.apache.shenyu.plugin.dubbo.common.handler.AbstractDubboPluginDataHandler;
 
 /**
  * The type Alibaba dubbo plugin data subscriber.
  */
-public class AlibabaDubboPluginDataHandler implements PluginDataHandler {
+public class AlibabaDubboPluginDataHandler extends AbstractDubboPluginDataHandler {
 
     @Override
-    public void handlerPlugin(final PluginData pluginData) {
-        if (null != pluginData && pluginData.getEnabled()) {
-            DubboRegisterConfig dubboRegisterConfig = GsonUtils.getInstance().fromJson(pluginData.getConfig(), DubboRegisterConfig.class);
-            DubboRegisterConfig exist = Singleton.INST.get(DubboRegisterConfig.class);
-            if (Objects.isNull(dubboRegisterConfig)) {
-                return;
-            }
-            if (Objects.isNull(exist) || !dubboRegisterConfig.equals(exist)) {
-                // If it is null, initialize it
-                ApplicationConfigCache.getInstance().init(dubboRegisterConfig);
-                ApplicationConfigCache.getInstance().invalidateAll();
-            }
-            Singleton.INST.single(DubboRegisterConfig.class, dubboRegisterConfig);
-        }
-    }
-
-    @Override
-    public String pluginNamed() {
-        return PluginEnum.DUBBO.getName();
+    protected void initConfigCache(final DubboRegisterConfig dubboRegisterConfig) {
+        AlibabaDubboConfigCache.getInstance().init(dubboRegisterConfig);
+        AlibabaDubboConfigCache.getInstance().invalidateAll();
     }
 }

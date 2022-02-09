@@ -21,15 +21,22 @@ package org.apache.shenyu.client.tars;
 import org.apache.shenyu.client.core.register.ShenyuClientRegisterRepositoryFactory;
 import org.apache.shenyu.client.tars.common.annotation.ShenyuTarsClient;
 import org.apache.shenyu.client.tars.common.annotation.ShenyuTarsService;
+import org.apache.shenyu.register.client.http.utils.RegisterUtils;
+import org.apache.shenyu.register.common.config.PropertiesConfig;
 import org.apache.shenyu.register.common.config.ShenyuRegisterCenterConfig;
 import org.junit.BeforeClass;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.MethodSorters;
+import org.mockito.MockedStatic;
 import org.mockito.junit.MockitoJUnitRunner;
 
+import java.util.Optional;
 import java.util.Properties;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mockStatic;
 
 /**
  * Test case for {@link TarsServiceBeanPostProcessor}.
@@ -45,12 +52,20 @@ public final class TarsServiceBeanPostProcessorTest {
         properties.setProperty("contextPath", "/tars");
         properties.setProperty("port", "8080");
         properties.setProperty("host", "localhost");
+        properties.setProperty("username", "admin");
+        properties.setProperty("password", "123456");
+
+        PropertiesConfig config = new PropertiesConfig();
+        config.setProps(properties);
 
         ShenyuRegisterCenterConfig mockRegisterCenter = new ShenyuRegisterCenterConfig();
         mockRegisterCenter.setServerLists("http://localhost:58080");
         mockRegisterCenter.setRegisterType("http");
         mockRegisterCenter.setProps(properties);
-        tarsServiceBeanPostProcessor = new TarsServiceBeanPostProcessor(mockRegisterCenter, ShenyuClientRegisterRepositoryFactory.newInstance(mockRegisterCenter));
+        MockedStatic<RegisterUtils> registerUtilsMockedStatic = mockStatic(RegisterUtils.class);
+        registerUtilsMockedStatic.when(() -> RegisterUtils.doLogin(any(), any(), any())).thenReturn(Optional.of("token"));
+        tarsServiceBeanPostProcessor = new TarsServiceBeanPostProcessor(config, ShenyuClientRegisterRepositoryFactory.newInstance(mockRegisterCenter));
+        registerUtilsMockedStatic.close();
     }
 
     @Test
